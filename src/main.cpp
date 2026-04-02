@@ -786,18 +786,15 @@ void loop()
     obdWrite(CMD_SPEED, sizeof(CMD_SPEED));
   }
 
-  // Slow-changing values (alternate PID 0105 / 0142 — one ELM request per tick)
+  // Slow-changing values: both PIDs each interval (matches bridge; avoids starving one).
   if (now - lastSlow >= SLOW_INTERVAL)
   {
     lastSlow = now;
 
-    delay(100);
-    if (slowPollTempNext)
-      obdWrite(CMD_TEMP, sizeof(CMD_TEMP));
-    else
-      obdWrite(CMD_VOLT, sizeof(CMD_VOLT));
-    slowPollTempNext = !slowPollTempNext;
-    delay(100);
+    delay(80);
+    obdWrite(CMD_TEMP, sizeof(CMD_TEMP));
+    delay(80);
+    obdWrite(CMD_VOLT, sizeof(CMD_VOLT));
   }
 #endif /* !OBD_REMOTE_BRIDGE */
 }

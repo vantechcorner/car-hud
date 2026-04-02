@@ -24,6 +24,12 @@
 #define DASH_BOTTOM_INSET 8
 /* Smaller side text — do NOT use LV_LABEL_LONG_MODE_CLIP with this (clips glyphs away) */
 #define DASH_SIDE_SMALL 200
+/* RPM / km/h labels — a bit smaller than full 24pt */
+#define DASH_RPM_KMH_SMALL 188
+/* Bottom “OBD OK” row */
+#define DASH_LINK_SMALL 176
+/* Gap from “RPM” label baseline block to speed digits (was too tight vs CENTER align) */
+#define DASH_RPM_TO_SPEED_GAP 12
 
 /**********************
  *      TYPEDEFS
@@ -43,7 +49,7 @@ static lv_obj_t * s_link_txt;
  **********************/
 
 static void dash_rpm_arc_style_cb(lv_observer_t * observer, lv_subject_t * subject);
-static void dash_coolant_color_cb(lv_observer_t * observer, lv_subject_t * subject);
+static void dash_coolant_main_cb(lv_observer_t * observer, lv_subject_t * subject);
 static void dash_battery_text_cb(lv_observer_t * observer, lv_subject_t * subject);
 static void dash_link_status_cb(lv_observer_t * observer, lv_subject_t * subject);
 static lv_obj_t * dash_wifi_bars_create(lv_obj_t * parent);
@@ -137,6 +143,11 @@ lv_obj_t * dashboard_create(void)
     lv_label_set_text_static(rpm_tag, "RPM");
     lv_obj_set_style_text_font(rpm_tag, roboto_regular_24, 0);
     lv_obj_set_style_text_color(rpm_tag, lv_color_hex(0x7A8FA3), 0);
+    lv_obj_add_flag(rpm_tag, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+    lv_obj_set_style_transform_scale_x(rpm_tag, DASH_RPM_KMH_SMALL, 0);
+    lv_obj_set_style_transform_scale_y(rpm_tag, DASH_RPM_KMH_SMALL, 0);
+    lv_obj_set_style_transform_pivot_x(rpm_tag, lv_pct(50), 0);
+    lv_obj_set_style_transform_pivot_y(rpm_tag, lv_pct(50), 0);
     lv_obj_align_to(rpm_tag, rpm_val, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
 
     /* Speed: no transform — scaled label + CLIP often mutilates glyphs on SW render */
@@ -148,13 +159,17 @@ lv_obj_t * dashboard_create(void)
     lv_obj_set_style_text_font(speed_val, roboto_bold_40, 0);
     lv_obj_set_style_text_color(speed_val, lv_color_hex(0xFFFFFF), 0);
     lv_obj_add_flag(speed_val, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
-    lv_obj_align(speed_val, LV_ALIGN_CENTER, 0, 8);
+    lv_obj_align_to(speed_val, rpm_tag, LV_ALIGN_OUT_BOTTOM_MID, 0, DASH_RPM_TO_SPEED_GAP);
 
     lv_obj_t * speed_unit = lv_label_create(scr);
     lv_label_set_text_static(speed_unit, "km/h");
     lv_obj_set_style_text_font(speed_unit, roboto_regular_24, 0);
     lv_obj_set_style_text_color(speed_unit, lv_color_hex(0xB8C4D0), 0);
     lv_obj_add_flag(speed_unit, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+    lv_obj_set_style_transform_scale_x(speed_unit, DASH_RPM_KMH_SMALL, 0);
+    lv_obj_set_style_transform_scale_y(speed_unit, DASH_RPM_KMH_SMALL, 0);
+    lv_obj_set_style_transform_pivot_x(speed_unit, lv_pct(50), 0);
+    lv_obj_set_style_transform_pivot_y(speed_unit, lv_pct(50), 0);
     lv_obj_align_to(speed_unit, speed_val, LV_ALIGN_OUT_BOTTOM_MID, 0, 4);
 
     /* --- Left: battery icon + voltage --- */
@@ -228,7 +243,7 @@ lv_obj_t * dashboard_create(void)
     lv_obj_align_to(th_stem, th_bulb, LV_ALIGN_OUT_TOP_MID, 0, 0);
 
     lv_obj_t * temp_main = lv_label_create(scr);
-    lv_label_bind_text(temp_main, &coolant_temp, "%02d°C");
+    lv_label_set_text_static(temp_main, "--°C");
     lv_obj_set_style_text_font(temp_main, roboto_regular_24, 0);
     lv_obj_set_style_text_align(temp_main, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(temp_main, LV_SIZE_CONTENT);
@@ -238,7 +253,7 @@ lv_obj_t * dashboard_create(void)
     lv_obj_set_style_transform_scale_y(temp_main, DASH_SIDE_SMALL, 0);
     lv_obj_set_style_transform_pivot_x(temp_main, lv_pct(50), 0);
     lv_obj_set_style_transform_pivot_y(temp_main, lv_pct(50), 0);
-    lv_subject_add_observer_obj(&coolant_temp, dash_coolant_color_cb, temp_main, NULL);
+    lv_subject_add_observer_obj(&coolant_temp, dash_coolant_main_cb, temp_main, NULL);
     lv_obj_align_to(temp_main, th_bulb, LV_ALIGN_OUT_BOTTOM_MID, 0, 8);
 
     lv_obj_t * temp_sub = lv_label_create(scr);
@@ -282,6 +297,10 @@ lv_obj_t * dashboard_create(void)
     lv_obj_set_style_text_font(link_txt, roboto_regular_24, 0);
     lv_obj_set_style_text_color(link_txt, lv_color_hex(0x8899AA), 0);
     lv_obj_set_style_text_opa(link_txt, LV_OPA_COVER, 0);
+    lv_obj_set_style_transform_scale_x(link_txt, DASH_LINK_SMALL, 0);
+    lv_obj_set_style_transform_scale_y(link_txt, DASH_LINK_SMALL, 0);
+    lv_obj_set_style_transform_pivot_x(link_txt, lv_pct(50), 0);
+    lv_obj_set_style_transform_pivot_y(link_txt, lv_pct(50), 0);
     s_link_txt = link_txt;
 
     lv_subject_add_observer_obj(&con_error, dash_link_status_cb, link_dot, NULL);
@@ -350,14 +369,23 @@ static void dash_rpm_arc_style_cb(lv_observer_t * observer, lv_subject_t * subje
     }
 }
 
-static void dash_coolant_color_cb(lv_observer_t * observer, lv_subject_t * subject)
+static void dash_coolant_main_cb(lv_observer_t * observer, lv_subject_t * subject)
 {
     lv_obj_t * lbl = lv_observer_get_target_obj(observer);
     if(lbl == NULL) return;
 
     int temp = lv_subject_get_int(subject);
-    lv_color_t c = (temp > 95) ? lv_color_hex(0xFF5560) : lv_color_hex(0xFFFFFF);
-    lv_obj_set_style_text_color(lbl, c, 0);
+    if(temp < -100) {
+        lv_label_set_text_static(lbl, "--°C");
+        lv_obj_set_style_text_color(lbl, lv_color_hex(0xFFFFFF), 0);
+    }
+    else {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%d°C", temp);
+        lv_label_set_text(lbl, buf);
+        lv_color_t c = (temp > 95) ? lv_color_hex(0xFF5560) : lv_color_hex(0xFFFFFF);
+        lv_obj_set_style_text_color(lbl, c, 0);
+    }
 }
 
 static void dash_battery_text_cb(lv_observer_t * observer, lv_subject_t * subject)

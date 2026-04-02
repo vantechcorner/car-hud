@@ -148,7 +148,8 @@ void hud_ui_init_gen(const char * asset_path)
      * Subjects
      *----------------*/
     lv_subject_init_int(&engine_rpm, 0);
-    lv_subject_init_int(&coolant_temp, 0);
+    /* Sentinel < -100 => UI shows “--°C” until PID 0x05 received */
+    lv_subject_init_int(&coolant_temp, -128);
     lv_subject_init_int(&speed, 0);
     lv_subject_init_int(&battery_tenths, -1);
     lv_subject_init_int(&can_error, 0);

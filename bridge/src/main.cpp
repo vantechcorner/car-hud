@@ -3,6 +3,10 @@
 #if defined(HUD_USE_WIFI)
 #include <WiFi.h>
 #include <WiFiUdp.h>
+#else
+/* UART-only build: keep Wi-Fi radio off so BT Classic peak current is not stacked
+ * with Wi-Fi — marginal USB / AMS1117 supplies often brown out (~E 467 ms). */
+#include <WiFi.h>
 #endif
 
 // ---------- Bridge output to ESP32-S3 HUD ----------
@@ -46,7 +50,6 @@ static uint32_t lastAltPoll = 0;
 static uint32_t lastSlow = 0;
 static uint32_t lastReconnectTry = 0;
 static bool pollSpeedNext = true; // xen kẽ 010D / 010C cho cảm giác “real-time”
-static bool pollSlowTempNext = true; // xen kẽ 0105 / 0142 (một lệnh mỗi chu kỳ chậm)
 #if defined(HUD_USE_WIFI)
 static uint32_t lastWifiTry = 0;
 #endif
@@ -118,32 +121,25 @@ void processElmLine(String line)
   if (p > 0)
     s = s.substring(p);
 
-  if (s.length() >= 2 && s.startsWith("41"))
+  if (s.length() >= 6 && s.startsWith("41"))
   {
-    // Supported payloads:
-    // - speed/temp: 41 PP XX   => compact length 6
-    // - rpm / voltage: 41 PP AABB => compact length 8
+    /* Many ELM lines are longer than 6/8 hex (padding, multi-frame tail). Only exact
+     * length matched before — real cars often sent e.g. "41057B...." and we dropped it. */
+    String pid = s.substring(2, 4);
+    unsigned long ppl = strtoul(pid.c_str(), nullptr, 16);
     String normalized;
-    if (s.length() == 6)
+    if (ppl == 0x0C || ppl == 0x42)
     {
-      String pid = s.substring(2, 4);
-      String v1 = s.substring(4, 6);
-      normalized = "41 " + pid + " " + v1;
-    }
-    else if (s.length() == 8)
-    {
-      String pid = s.substring(2, 4);
+      if (s.length() < 8)
+        return;
       String v1 = s.substring(4, 6);
       String v2 = s.substring(6, 8);
       normalized = "41 " + pid + " " + v1 + " " + v2;
     }
     else
     {
-#ifdef BRIDGE_DEBUG
-      Serial.printf("[bridge] skip 41 len=%u line=%s compact=%s\n",
-                    (unsigned)s.length(), line.c_str(), s.c_str());
-#endif
-      return;
+      String v1 = s.substring(4, 6);
+      normalized = "41 " + pid + " " + v1;
     }
     emitToHud(normalized);
 #ifdef BRIDGE_DEBUG
@@ -208,16 +204,20 @@ void initElm()
 void setup()
 {
   Serial.begin(115200);
-  delay(300); // USB-UART stable; avoids truncated first lines
+  delay(400); /* USB enumerate + bulk cap charge before radio */
 
-  // BT Classic controller before WiFi reduces coexistence panics on many ESP32 boards.
+#if !defined(HUD_USE_WIFI)
+  WiFi.mode(WIFI_OFF);
+#endif
+
+  // BT Classic before WiFi on dual-radio builds reduces coexistence panics.
   if (!SerialBT.begin("CarHUD-Bridge", true))
   {
     Serial.println("Bluetooth init failed");
   }
 
 #if defined(HUD_USE_WIFI)
-  delay(100);
+  delay(350); /* avoid BT + Wi-Fi scan peak overlapping on weak 5 V */
   WiFi.mode(WIFI_STA);
   // Modem sleep can add 100–300ms+ jitter on STA → HUD; HUD path needs low latency.
   WiFi.setSleep(false);
@@ -291,11 +291,9 @@ void loop()
   if (now - lastSlow >= SLOW_INTERVAL)
   {
     lastSlow = now;
-    if (pollSlowTempNext)
-      sendElm("0105"); // coolant temp
-    else
-      sendElm("0142"); // control module voltage
-    pollSlowTempNext = !pollSlowTempNext;
+    sendElm("0105"); // coolant temp
+    delay(40);
+    sendElm("0142"); // control module voltage (many ECUs; skip if unsupported)
   }
 
   delay(5);

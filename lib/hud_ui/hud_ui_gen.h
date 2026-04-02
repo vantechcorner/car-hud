@@ -59,7 +59,7 @@ extern lv_font_t * roboto_bold_150;
  * Images
  *----------------*/
 
-extern const void * subaru_logo;
+extern const void * mazda_logo;
 extern const void * rotation;
 extern const void * brightness;
 extern const void * hud;
@@ -75,7 +75,7 @@ extern const void * restart;
 extern lv_subject_t engine_rpm;
 extern lv_subject_t coolant_temp;
 extern lv_subject_t speed;
-extern lv_subject_t fuel_capacity;
+extern lv_subject_t battery_tenths;
 extern lv_subject_t can_error;
 extern lv_subject_t con_error;
 extern lv_subject_t settings_brightness;

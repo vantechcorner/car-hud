@@ -43,8 +43,8 @@ lv_obj_t * settings_create(void)
 
     if (!style_inited) {
         lv_style_init(&style_cont);
-        lv_style_set_width(&style_cont, 360);
-        lv_style_set_height(&style_cont, 300);
+        lv_style_set_width(&style_cont, 240);
+        lv_style_set_height(&style_cont, 240);
         lv_style_set_pad_all(&style_cont, 0);
         lv_style_set_pad_row(&style_cont, 0);
         lv_style_set_radius(&style_cont, 0);
@@ -58,7 +58,7 @@ lv_obj_t * settings_create(void)
         lv_style_set_radius(&style_dropdown, 5);
 
         lv_style_init(&style_slider);
-        lv_style_set_width(&style_slider, 200);
+        lv_style_set_width(&style_slider, 100);
 
         lv_style_init(&style_pressed);
         lv_style_set_bg_color(&style_pressed, lv_color_hex(0xffffff));
@@ -75,21 +75,22 @@ lv_obj_t * settings_create(void)
     lv_obj_t * lv_obj_1 = lv_obj_create(lv_obj_0);
     lv_obj_set_align(lv_obj_1, LV_ALIGN_CENTER);
     lv_obj_set_scrollbar_mode(lv_obj_1, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_scroll_dir(lv_obj_1, LV_DIR_VER);
     lv_obj_add_style(lv_obj_1, &style_cont, 0);
     lv_obj_t * settings_back = settings_item_create(lv_obj_1, back);
     lv_obj_set_name(settings_back, "settings_back");
     lv_obj_add_style(settings_back, &style_pressed, LV_STATE_PRESSED);
     lv_obj_t * lv_label_0 = lv_label_create(settings_back);
     lv_obj_set_flex_grow(lv_label_0, 1);
-    lv_label_set_text(lv_label_0, "Back to Main Screen");
+    lv_label_set_text(lv_label_0, "Back");
     
     lv_obj_t * settings_item_0 = settings_item_create(lv_obj_1, brightness);
-    lv_obj_set_style_pad_column(settings_item_0, 50, 0);
+    lv_obj_set_style_pad_column(settings_item_0, 6, 0);
     lv_obj_t * lv_slider_0 = lv_slider_create(settings_item_0);
     lv_slider_set_min_value(lv_slider_0, 10);
     lv_slider_set_max_value(lv_slider_0, 255);
     lv_slider_bind_value(lv_slider_0, &settings_brightness);
-    lv_obj_set_ext_click_area(lv_slider_0, 50);
+    lv_obj_set_ext_click_area(lv_slider_0, 20);
     lv_obj_add_style(lv_slider_0, &style_slider, 0);
     
     lv_obj_t * settings_item_1 = settings_item_create(lv_obj_1, hud);

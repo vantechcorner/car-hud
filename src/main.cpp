@@ -31,14 +31,48 @@
 */
 
 #include <Arduino.h>
+#include <cstring>
 #include "main.h"
 #include <Preferences.h>
 #include "hud_ui.h"
+#if !defined(OBD_UART_BRIDGE) && !defined(OBD_WIFI_BRIDGE)
 #include <NimBLEDevice.h>
+#endif
 #include <Timber.h>
+
+#if defined(OBD_UART_BRIDGE) || defined(OBD_WIFI_BRIDGE)
+#define OBD_REMOTE_BRIDGE 1
+#endif
 
 #define LVGL_LOCK() xSemaphoreTakeRecursive(lvgl_mutex, portMAX_DELAY)
 #define LVGL_UNLOCK() xSemaphoreGiveRecursive(lvgl_mutex)
+
+#ifdef OBD_WIFI_BRIDGE
+#include <WiFi.h>
+#include <WiFiUdp.h>
+#ifndef OBD_WIFI_UDP_PORT
+#define OBD_WIFI_UDP_PORT 3333
+#endif
+WiFiUDP obdWifiUdp;
+#endif
+
+#ifdef OBD_UART_BRIDGE
+#ifndef OBD_BRIDGE_BAUD
+#define OBD_BRIDGE_BAUD 115200
+#endif
+#ifndef OBD_BRIDGE_RX_PIN
+#define OBD_BRIDGE_RX_PIN 16
+#endif
+#ifndef OBD_BRIDGE_TX_PIN
+#define OBD_BRIDGE_TX_PIN 15
+#endif
+
+HardwareSerial OBDBridgeSerial(1);
+#endif
+
+#if defined(OBD_REMOTE_BRIDGE)
+static uint32_t lastBridgePacket = 0;
+#endif
 
 // Locking LVGL calls to prevent concurrent access
 // This is important because LVGL is not thread-safe
@@ -61,11 +95,11 @@ const uint8_t CMD_ATSP6[] = {0x41, 0x54, 0x53, 0x50, 0x36, 0x0D}; // Set protoco
 
 const uint8_t CMD_SPEED[] = {0x30, 0x31, 0x30, 0x44, 0x0D}; // Vehicle speed (010D)
 const uint8_t CMD_RPM[] = {0x30, 0x31, 0x30, 0x43, 0x0D};   // Engine RPM (010C)
-const uint8_t CMD_FUEL[] = {0x30, 0x31, 0x32, 0x46, 0x0D};  // Fuel Capacity (012F)
 const uint8_t CMD_TEMP[] = {0x30, 0x31, 0x30, 0x35, 0x0D};  // Coolant Temperature (0105)
+const uint8_t CMD_VOLT[] = {0x30, 0x31, 0x34, 0x32, 0x0D};  // Control module voltage (0142)
 
 Preferences prefs;
-HWCDC USBSerial;
+/* USBSerial is provided by Arduino-ESP32 core for ESP32-S3 (HWCDC); do not define it here. */
 
 /* ---------- LVGL DISPLAY ---------- */
 uint8_t lv_buffer[2][LV_BUFFER_SIZE];
@@ -78,12 +112,13 @@ bool should_restart = false;
 
 static uint32_t lastFast = 0;   // rpm
 static uint32_t lastMedium = 0; // speed
-static uint32_t lastSlow = 0;   // fuel, temp
+static uint32_t lastSlow = 0;   // coolant temp
 
 const uint32_t FAST_INTERVAL = 100;    // 0.1 seconds
 const uint32_t MEDIUM_INTERVAL = 1000; // 1 second
 const uint32_t SLOW_INTERVAL = 10000;  // 10 seconds
 
+#ifndef OBD_REMOTE_BRIDGE
 /* OBD UUIDs (16-bit, vendor specific) */
 static NimBLEUUID OBD_SERVICE_UUID("FFF0");
 static NimBLEUUID OBD_CHAR_UUID("FFF1");
@@ -92,13 +127,19 @@ static const NimBLEAdvertisedDevice *obdDevice = nullptr;
 static NimBLEClient *client = nullptr;
 static NimBLERemoteCharacteristic *obdChar = nullptr;
 static NimBLEScan *scan = nullptr;
+#endif
 
 /* ---------- HEX UTILS ---------- */
 static uint8_t hexToByte(uint8_t hi, uint8_t lo)
 {
-  hi = (hi <= '9') ? hi - '0' : hi - 'A' + 10;
-  lo = (lo <= '9') ? lo - '0' : lo - 'A' + 10;
+  hi = (hi <= '9') ? (uint8_t)(hi - '0') : (uint8_t)((hi & ~0x20) - 'A' + 10);
+  lo = (lo <= '9') ? (uint8_t)(lo - '0') : (uint8_t)((lo & ~0x20) - 'A' + 10);
   return (hi << 4) | lo;
+}
+
+static bool isHexDigit(uint8_t c)
+{
+  return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f');
 }
 
 /**
@@ -140,27 +181,46 @@ String formatHexString(
 }
 
 /* ---------- SIMPLE PARSER ---------- */
+/* Accepts ELM-style ASCII: "41 0D 3A", "410D3A", or mixed; extracts hex digits only.
+ * Mode 01 single-byte PIDs need 6 hex chars (41 + PID + 1 data byte); RPM needs 8. */
 void parseObd(const uint8_t *data, size_t len)
 {
-  if (len < 8)
+  if (len < 4)
     return;
 
-  if (data[4] == 'E' && data[5] == 'R' && data[6] == 'R' && data[7] == 'O')
+  char scratch[96];
+  size_t slen = len < sizeof(scratch) - 1 ? len : sizeof(scratch) - 1;
+  memcpy(scratch, data, slen);
+  scratch[slen] = '\0';
+  if (strstr(scratch, "ERROR") != nullptr)
   {
     LVGL_EXEC(lv_subject_set_int(&can_error, 1));
     return;
   }
-  // Must start with ASCII "41"
-  if (data[0] != '4' || data[1] != '1')
+
+  char hex[32];
+  size_t nh = 0;
+  for (size_t i = 0; i < len && nh < sizeof(hex) - 1; i++)
+  {
+    if (isHexDigit(data[i]))
+      hex[nh++] = (char)data[i];
+  }
+  hex[nh] = '\0';
+
+  if (nh < 6)
+    return;
+  if (hex[0] != '4' || hex[1] != '1')
     return;
 
-  uint8_t pid = hexToByte(data[3], data[4]);
+  uint8_t pid = hexToByte((uint8_t)hex[2], (uint8_t)hex[3]);
 
   switch (pid)
   {
   case 0x0D: // Speed
   {
-    uint8_t A = hexToByte(data[6], data[7]);
+    if (nh < 6)
+      return;
+    uint8_t A = hexToByte((uint8_t)hex[4], (uint8_t)hex[5]);
     Timber.i("Speed: %u km/h\n", A);
     LVGL_EXEC(lv_subject_set_int(&speed, (int)A));
     break;
@@ -168,31 +228,42 @@ void parseObd(const uint8_t *data, size_t len)
 
   case 0x0C: // RPM
   {
-    uint8_t A = hexToByte(data[6], data[7]);
-    uint8_t B = hexToByte(data[9], data[10]);
+    if (nh < 8)
+      return;
+    uint8_t A = hexToByte((uint8_t)hex[4], (uint8_t)hex[5]);
+    uint8_t B = hexToByte((uint8_t)hex[6], (uint8_t)hex[7]);
     float rpm = ((A << 8) | B) / 4.0f;
     Timber.i("RPM: %.0f\n", rpm);
     LVGL_EXEC(lv_subject_set_int(&engine_rpm, (int)rpm));
     break;
   }
 
-  case 0x2F: // Fuel
-  {
-    uint8_t A = hexToByte(data[6], data[7]);
-    float fuel = (A * 100.0f) / 255.0f;
-    Timber.i("Fuel: %.1f %%\n", fuel);
-    int litres = fuel * 50 / 100; // Assuming 50L tank
-    LVGL_EXEC(lv_subject_set_int(&fuel_capacity, litres));
-    break;
-  }
   case 0x05: // Coolant temp
   {
-    uint8_t A = hexToByte(data[6], data[7]);
+    if (nh < 6)
+      return;
+    uint8_t A = hexToByte((uint8_t)hex[4], (uint8_t)hex[5]);
     float temp = A - 40.0f;
     Timber.i("Coolant: %.1f C\n", temp);
     LVGL_EXEC(lv_subject_set_int(&coolant_temp, (int)temp));
     break;
   }
+
+  case 0x42: // Control module voltage (mV in response)
+  {
+    if (nh < 8)
+      return;
+    uint8_t A = hexToByte((uint8_t)hex[4], (uint8_t)hex[5]);
+    uint8_t B = hexToByte((uint8_t)hex[6], (uint8_t)hex[7]);
+    int mv = (A << 8) | B;
+    int tenths = (mv + 50) / 100;
+    Timber.i("Battery: %d.%d V\n", tenths / 10, tenths % 10);
+    LVGL_EXEC(lv_subject_set_int(&battery_tenths, tenths));
+    break;
+  }
+
+  default:
+    return;
   }
   LVGL_EXEC(lv_subject_set_int(&can_error, 0));
 }
@@ -204,6 +275,7 @@ void deep_sleep_restart()
   esp_deep_sleep_start();
 }
 
+#ifndef OBD_REMOTE_BRIDGE
 class ClientCallbacks : public NimBLEClientCallbacks
 {
   void onConnect(NimBLEClient *pClient) override
@@ -305,6 +377,7 @@ void obdWrite(const uint8_t *cmd, size_t len)
   if (obdChar && obdChar->canWrite())
     obdChar->writeValue(cmd, len, false);
 }
+#endif /* OBD_REMOTE_BRIDGE */
 
 /* ---------- LVGL DISPLAY & TOUCH DRIVER ---------- */
 /*Convert rotation number to lvgl rotation type*/
@@ -423,7 +496,11 @@ void on_hud_change(lv_observer_t *observer, lv_subject_t *subject)
 {
   int32_t hud = lv_subject_get_int(subject);
   prefs.putInt("hud", hud);
+#if defined(VIEWE_SMARTRING) || defined(VIEWE_KNOB_15)
   tft.setFlipMode(hud);
+#else
+  tft.setRotation(hud ? 2 : 0);
+#endif
   lv_obj_invalidate(lv_screen_active());
 }
 
@@ -531,7 +608,11 @@ void setup()
   should_restart = restart;
 
   tft.setBrightness((uint8_t)brightness);
+#if defined(VIEWE_SMARTRING) || defined(VIEWE_KNOB_15)
   tft.setFlipMode(hud);
+#else
+  tft.setRotation(hud ? 2 : 0);
+#endif
   // #ifdef SW_ROTATION
   //   lv_display_set_rotation(lv_display, get_rotation(rotation));
   // #else
@@ -583,7 +664,8 @@ void setup()
     lv_screen_load(dashboard_screen);
   }
 
-  /* BLE Setup */
+  /* BLE / bridge input */
+#ifndef OBD_REMOTE_BRIDGE
   NimBLEDevice::init("");
   NimBLEDevice::setPower(ESP_PWR_LVL_P9);
 
@@ -591,12 +673,83 @@ void setup()
   scan->setScanCallbacks(new ScanCB());
   scan->setActiveScan(true);
   scan->start(0);
+#elif defined(OBD_WIFI_BRIDGE)
+#ifndef WIFI_AP_SSID
+#define WIFI_AP_SSID "CarHUD-Link"
+#endif
+#ifndef WIFI_AP_PASS
+#define WIFI_AP_PASS "carhud12"
+#endif
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(WIFI_AP_SSID, WIFI_AP_PASS);
+  obdWifiUdp.begin(OBD_WIFI_UDP_PORT);
+  Timber.i("OBD WiFi bridge: AP %s IP=%s UDP:%u",
+           WIFI_AP_SSID, WiFi.softAPIP().toString().c_str(), (unsigned)OBD_WIFI_UDP_PORT);
+#else
+  OBDBridgeSerial.begin(OBD_BRIDGE_BAUD, SERIAL_8N1, OBD_BRIDGE_RX_PIN, OBD_BRIDGE_TX_PIN);
+  Timber.i("OBD UART bridge enabled RX=%d TX=%d baud=%d", OBD_BRIDGE_RX_PIN, OBD_BRIDGE_TX_PIN, OBD_BRIDGE_BAUD);
+#endif
 }
 
 void loop()
 {
   LVGL_EXEC(lv_timer_handler()); // Update the UI
   delay(5);
+
+#if defined(OBD_WIFI_BRIDGE)
+  {
+    int n = obdWifiUdp.parsePacket();
+    if (n > 0)
+    {
+      uint8_t pkt[96];
+      int len = n > (int)sizeof(pkt) - 1 ? (int)sizeof(pkt) - 1 : n;
+      obdWifiUdp.read(pkt, len);
+      parseObd(pkt, (size_t)len);
+      lastBridgePacket = millis();
+    }
+  }
+#elif defined(OBD_UART_BRIDGE)
+  static char lineBuf[80];
+  static size_t lineLen = 0;
+
+  while (OBDBridgeSerial.available())
+  {
+    char c = (char)OBDBridgeSerial.read();
+    if (c == '\r' || c == '\n')
+    {
+      if (lineLen >= 6)
+      {
+        lineBuf[lineLen] = '\0';
+        parseObd((const uint8_t *)lineBuf, lineLen);
+        lastBridgePacket = millis();
+      }
+      lineLen = 0;
+      continue;
+    }
+
+    if ((uint8_t)c < 32 || lineLen >= sizeof(lineBuf) - 1)
+    {
+      continue;
+    }
+
+    lineBuf[lineLen++] = c;
+  }
+#endif
+
+#if defined(OBD_REMOTE_BRIDGE)
+  if (millis() - lastBridgePacket > 5000)
+  {
+    LVGL_EXEC(lv_subject_set_int(&con_error, 1));
+  }
+  else
+  {
+    LVGL_EXEC(lv_subject_set_int(&con_error, 0));
+  }
+#endif
+
+#if defined(OBD_REMOTE_BRIDGE)
+  return;
+#else
 
   if (obdDevice && !client)
   {
@@ -633,15 +786,18 @@ void loop()
     obdWrite(CMD_SPEED, sizeof(CMD_SPEED));
   }
 
-  // Slow-changing values
+  // Slow-changing values (alternate PID 0105 / 0142 — one ELM request per tick)
   if (now - lastSlow >= SLOW_INTERVAL)
   {
     lastSlow = now;
 
     delay(100);
-    obdWrite(CMD_FUEL, sizeof(CMD_FUEL));
-    delay(100);
-    obdWrite(CMD_TEMP, sizeof(CMD_TEMP));
+    if (slowPollTempNext)
+      obdWrite(CMD_TEMP, sizeof(CMD_TEMP));
+    else
+      obdWrite(CMD_VOLT, sizeof(CMD_VOLT));
+    slowPollTempNext = !slowPollTempNext;
     delay(100);
   }
+#endif /* !OBD_REMOTE_BRIDGE */
 }

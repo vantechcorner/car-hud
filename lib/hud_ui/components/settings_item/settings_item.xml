@@ -1,15 +1,15 @@
 <component>
 	<previews>
-		<preview width="360" style_bg_color="0x000" />
+		<preview width="240" style_bg_color="0x000" />
 	</previews>
 	<styles>
 		<style
 			name="style_item"
-			width="360"
-			height="100"
+			width="240"
+			height="40"
 			pad_all="0"
-			pad_left="10"
-			pad_right="10"
+			pad_left="6"
+			pad_right="6"
 			border_width="1"
 			text_color="0xfff"
 			border_side="bottom"
@@ -20,13 +20,13 @@
 			flex_cross_place="center"
 		/>
 
-		<style name="style_slider" width="200" />
+		<style name="style_slider" width="100" />
 	</styles>
 	<api>
 		<prop name="icon" type="image" default="hud" />
 	</api>
 	<view>
 		<style name="style_item" />
-		<lv_image src="$icon" />
+		<lv_image src="$icon" scale_x="192" scale_y="192" />
 	</view>
 </component>

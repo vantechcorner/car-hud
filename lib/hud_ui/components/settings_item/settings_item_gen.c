@@ -41,11 +41,11 @@ lv_obj_t * settings_item_create(lv_obj_t * parent, const void * icon)
 
     if (!style_inited) {
         lv_style_init(&style_item);
-        lv_style_set_width(&style_item, 360);
-        lv_style_set_height(&style_item, 100);
+        lv_style_set_width(&style_item, 240);
+        lv_style_set_height(&style_item, 40);
         lv_style_set_pad_all(&style_item, 0);
-        lv_style_set_pad_left(&style_item, 10);
-        lv_style_set_pad_right(&style_item, 10);
+        lv_style_set_pad_left(&style_item, 6);
+        lv_style_set_pad_right(&style_item, 6);
         lv_style_set_border_width(&style_item, 1);
         lv_style_set_text_color(&style_item, lv_color_hex3(0xfff));
         lv_style_set_border_side(&style_item, LV_BORDER_SIDE_BOTTOM);
@@ -56,7 +56,7 @@ lv_obj_t * settings_item_create(lv_obj_t * parent, const void * icon)
         lv_style_set_flex_cross_place(&style_item, LV_FLEX_ALIGN_CENTER);
 
         lv_style_init(&style_slider);
-        lv_style_set_width(&style_slider, 200);
+        lv_style_set_width(&style_slider, 100);
 
         style_inited = true;
     }
@@ -67,6 +67,8 @@ lv_obj_t * settings_item_create(lv_obj_t * parent, const void * icon)
     lv_obj_add_style(lv_obj_0, &style_item, 0);
     lv_obj_t * lv_image_0 = lv_image_create(lv_obj_0);
     lv_image_set_src(lv_image_0, icon);
+    lv_image_set_scale_x(lv_image_0, 192);
+    lv_image_set_scale_y(lv_image_0, 192);
 
     LV_TRACE_OBJ_CREATE("finished");
 

@@ -1,5 +1,16 @@
-.pio
+# PlatformIO (root + nested e.g. bridge/)
+**/.pio/
+.pio/
+
+# Editor / IDE noise
 .vscode/.browse.c_cpp.db*
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+
+# Local scratch (serial captures, one-off logs)
+test/*-log.txt
+test/*.log
+
+# Accidental backups next to sources
+**/*.backup

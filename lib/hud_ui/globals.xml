@@ -17,7 +17,8 @@
 		<int name="engine_rpm" value="0" />
 		<int name="coolant_temp" value="0" />
 		<int name="speed" value="0" />
-		<int name="fuel_capacity" value="0" />
+		<!-- Battery voltage in tenths of a volt (128 = 12.8 V); -1 = unknown / no data yet -->
+		<int name="battery_tenths" value="-1" />
 
 		<int name="can_error" value="0" min_value="0" max_value="1" />
 		<int name="con_error" value="1" min_value="0" max_value="1" />
@@ -30,7 +31,7 @@
 
 	<images>
 		<!-- Add <file> or <data> tags here -->
-		<data name="subaru_logo" src_path="images/subaru_logo.png" color_format="rgb565a8" />
+		<data name="mazda_logo" src_path="images/mazda_logo_small.png" color_format="rgb565a8" />
 		<data name="rotation" src_path="images/rotation.png" color_format="rgb565a8" />
 		<data name="brightness" src_path="images/brightness.png" color_format="rgb565a8" />
 		<data name="hud" src_path="images/hud.png" color_format="rgb565a8" />

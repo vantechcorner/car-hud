@@ -1,0 +1,6 @@
+# Bridge: app just over ~1.5MB (BT Classic + WiFi). Fits 2MB and 4MB flash.
+# huge_app (~3MB app) breaks 2MB modules → boot loop.
+# Name,   Type, SubType, Offset,  Size, Flags
+nvs,      data, nvs,     0x9000,  0x6000,
+phy_init, data, phy,     0xf000,  0x1000,
+factory,  app,  factory, 0x10000, 0x180000,

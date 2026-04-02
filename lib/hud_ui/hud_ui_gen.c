@@ -54,8 +54,8 @@ extern lv_font_t roboto_bold_150_data;
  * Images
  *----------------*/
 
-const void * subaru_logo;
-extern const void * subaru_logo_data;
+const void * mazda_logo;
+extern const lv_image_dsc_t mazda_logo_small;
 const void * rotation;
 extern const void * rotation_data;
 const void * brightness;
@@ -84,7 +84,7 @@ lv_style_t style_dark;
 lv_subject_t engine_rpm;
 lv_subject_t coolant_temp;
 lv_subject_t speed;
-lv_subject_t fuel_capacity;
+lv_subject_t battery_tenths;
 lv_subject_t can_error;
 lv_subject_t con_error;
 lv_subject_t settings_brightness;
@@ -119,7 +119,7 @@ void hud_ui_init_gen(const char * asset_path)
     /*----------------
      * Images
      *----------------*/
-    subaru_logo = &subaru_logo_data;
+    mazda_logo = &mazda_logo_small;
     rotation = &rotation_data;
     brightness = &brightness_data;
     hud = &hud_data;
@@ -150,7 +150,7 @@ void hud_ui_init_gen(const char * asset_path)
     lv_subject_init_int(&engine_rpm, 0);
     lv_subject_init_int(&coolant_temp, 0);
     lv_subject_init_int(&speed, 0);
-    lv_subject_init_int(&fuel_capacity, 0);
+    lv_subject_init_int(&battery_tenths, -1);
     lv_subject_init_int(&can_error, 0);
     lv_subject_set_min_value_int(&can_error, 0);
     lv_subject_set_max_value_int(&can_error, 1);
@@ -186,7 +186,7 @@ void hud_ui_init_gen(const char * asset_path)
     lv_xml_register_subject(NULL, "engine_rpm", &engine_rpm);
     lv_xml_register_subject(NULL, "coolant_temp", &coolant_temp);
     lv_xml_register_subject(NULL, "speed", &speed);
-    lv_xml_register_subject(NULL, "fuel_capacity", &fuel_capacity);
+    lv_xml_register_subject(NULL, "battery_tenths", &battery_tenths);
     lv_xml_register_subject(NULL, "can_error", &can_error);
     lv_xml_register_subject(NULL, "con_error", &con_error);
     lv_xml_register_subject(NULL, "settings_brightness", &settings_brightness);
@@ -201,7 +201,7 @@ void hud_ui_init_gen(const char * asset_path)
      * While running in the editor skip this step to update the preview when the XML changes */
 #if LV_USE_XML && !defined(LV_EDITOR_PREVIEW)
     /* Register images */
-    lv_xml_register_image(NULL, "subaru_logo", subaru_logo);
+    lv_xml_register_image(NULL, "mazda_logo", mazda_logo);
     lv_xml_register_image(NULL, "rotation", rotation);
     lv_xml_register_image(NULL, "brightness", brightness);
     lv_xml_register_image(NULL, "hud", hud);

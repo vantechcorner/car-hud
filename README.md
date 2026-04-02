@@ -21,6 +21,14 @@ The system communicates with the vehicle ECU over ISO 15765-4 (CAN) and renders 
 
 ![Viewe SmartRing](images/viewe_smartring.png?raw=true "smartring")
 
+### Bluetooth Classic adapter note
+
+If your OBD adapter is Bluetooth Classic only (example: BT3.0 adapters), ESP32-S3 cannot connect to it directly.
+
+Use an ESP32 classic bridge firmware from `bridge/` and build HUD with environment:
+
+`lolin_s3_mini_1_28_uart_bridge`
+
 ## Parameters
 
 - Engine RPM  

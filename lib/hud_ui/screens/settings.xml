@@ -2,8 +2,8 @@
 	<styles>
 		<style
 			name="style_cont"
-			width="360"
-			height="300"
+			width="240"
+			height="240"
 			pad_all="0"
 			pad_row="0"
 			radius="0"
@@ -13,20 +13,20 @@
 			flex_flow="column"
 		/>
 		<style name="style_dropdown" border_width="0" radius="5" />
-		<style name="style_slider" width="200" />
+		<style name="style_slider" width="100" />
 		<style name="style_pressed" bg_color="0xffffff" bg_opa="100" radius="0" />
 	</styles>
 	<view>
 		<style name="style_dark" />
 
-		<lv_obj align="center" scrollbar_mode="off">
+		<lv_obj align="center" scrollbar_mode="off" scroll_dir="ver">
 			<style name="style_cont" />
 			<settings_item name="settings_back" icon="back">
 				<style name="style_pressed" selector="pressed" />
-				<lv_label flex_grow="1" text="Back to Main Screen" />
+				<lv_label flex_grow="1" text="Back" />
 			</settings_item>
-			<settings_item icon="brightness" style_pad_column="50">
-				<lv_slider min_value="10" max_value="255" bind_value="settings_brightness" ext_click_area="50">
+			<settings_item icon="brightness" style_pad_column="6">
+				<lv_slider min_value="10" max_value="255" bind_value="settings_brightness" ext_click_area="20">
 					<style name="style_slider" />
 				</lv_slider>
 			</settings_item>

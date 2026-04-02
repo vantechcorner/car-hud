@@ -3,6 +3,6 @@
 	<view>
 		<style name="style_dark" />
 
-		<lv_image src="subaru_logo" align="center" />
+		<lv_image src="mazda_logo" align="center" />
 	</view>
 </screen>

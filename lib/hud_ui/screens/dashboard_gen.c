@@ -150,13 +150,17 @@ lv_obj_t * dashboard_create(void)
     lv_obj_set_style_transform_pivot_y(rpm_tag, lv_pct(50), 0);
     lv_obj_align_to(rpm_tag, rpm_val, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
 
-    /* Speed: no transform — scaled label + CLIP often mutilates glyphs on SW render */
+    /* Speed: fixed width = max “888” so bind_text updates keep optical center (LV_SIZE_CONTENT
+     * + align_to only runs once — extra digits grew to the right). */
     lv_obj_t * speed_val = lv_label_create(scr);
-    lv_label_bind_text(speed_val, &speed, "%d");
-    lv_obj_set_width(speed_val, LV_SIZE_CONTENT);
-    lv_obj_set_height(speed_val, LV_SIZE_CONTENT);
-    lv_obj_set_style_text_align(speed_val, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_font(speed_val, roboto_bold_40, 0);
+    lv_point_t speed_w3;
+    lv_text_get_size(&speed_w3, "888", roboto_bold_40, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    lv_obj_set_width(speed_val, speed_w3.x);
+    lv_obj_set_height(speed_val, LV_SIZE_CONTENT);
+    lv_label_set_long_mode(speed_val, LV_LABEL_LONG_MODE_CLIP);
+    lv_label_bind_text(speed_val, &speed, "%d");
+    lv_obj_set_style_text_align(speed_val, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(speed_val, lv_color_hex(0xFFFFFF), 0);
     lv_obj_add_flag(speed_val, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
     lv_obj_align_to(speed_val, rpm_tag, LV_ALIGN_OUT_BOTTOM_MID, 0, DASH_RPM_TO_SPEED_GAP);
